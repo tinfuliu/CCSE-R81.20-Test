@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CCSE 測驗 v12</title>
+<style>
+  :root { --bg:#0b1020; --fg:#e7ebff; --card:#141a33; --muted:#99a2d0; --accent:#6aa0ff; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--fg); }
+  header { padding:18px 20px; border-bottom:1px solid #1f2748; position:sticky; top:0; background:linear-gradient(#0b1020,#0b1020cc); backdrop-filter: blur(4px); z-index:10; }
+  h1 { font-size:20px; margin:0 0 6px 0; }
+  .muted { color: var(--muted); }
+  main { max-width: 1100px; margin: 24px auto; padding: 0 16px 40px; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .toolbar > * { background: var(--card); border: 1px solid #1f2748; color: var(--fg); border-radius: 10px; padding:10px 12px; }
+  select, input { outline:none; }
+  button { cursor:pointer; transition: all .2s ease; }
+  button:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+  .card { background: var(--card); border:1px solid #1f2748; border-radius: 16px; padding:16px; margin:10px 0 18px; }
+  .qhead { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px; }
+  .qid { font-weight:600; color:#cfd6ff; }
+  .qstats { font-size:12px; color:#9ab0ff; }
+  .qtxt { font-size:18px; line-height:1.45; white-space:pre-wrap; }
+  .choices { display:grid; grid-template-columns:1fr; gap:8px; margin-top:10px; }
+  .choice { border:1px solid #2a345f; border-radius:12px; padding:10px; cursor:pointer; }
+  .choice.selected { border-color: var(--accent); background: #0d1530; }
+  .choice.correct { border-color: #42cd7f; background: #0f2a1a; }
+  .choice.wrong { border-color: #ff6b6b; background: #2a1111; }
+  .choice.locked { opacity: .7; cursor: not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+  .pill { background:#0f1a3a; border:1px solid #2a345f; border-radius:999px; padding:6px 10px; font-size:12px; color:#cfd6ff; }
+  .footer { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .btn { background: #203162; border:1px solid #40549b; color:white; border-radius:10px; padding:10px 14px; cursor:pointer; }
+  .btn.secondary { background: transparent; border-color:#334279; color:#cfd6ff; }
+  .btn.mark { background:#2a2142; border-color:#7e5bef; }
+  .btn.mark.active { background:#3b2f6b; border-color:#a58bff; box-shadow: 0 0 0 2px rgba(165,139,255,.25) inset; }
+  .btn.disabled { opacity: .5; cursor: not-allowed; }
+  .danger { background:#3a1620; border-color:#a33; }
+  .scoreBanner { background:#0f1a3a; border:1px solid #2a345f; border-radius:14px; padding:10px 12px; margin:10px 0; font-weight:600; }
+  .searchBox { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .searchInput { width:240px; }
+  .hidden { display:none; }
+  .summary { display:flex; flex-direction:column; gap:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CCSE 測驗 v12 <span class="muted">— 完整版</span></h1>
+  <div class="muted" id="hdrMeta"></div>
+</header>
+<main>
+  <section class="card">
+    <div class="row">
+      <div class="toolbar">
+        <label>模式
+          <select id="mode">
+            <option value="exam">Exam（確認後顯示對錯）</option>
+            <option value="review_wrong">Review Wrong（錯題重練：隨機）</option>
+            <option value="review_wrong_all">Review Wrong（瀏覽全部錯題）</option>
+            <option value="search">Search（關鍵字找題）</option>
+          </select>
+        </label>
+        <label id="countWrap">題數
+          <select id="count">
+            <option>5</option>
+            <option>10</option>
+            <option selected>20</option>
+            <option>50</option>
+            <option>100</option>
+          </select>
+        </label>
+        <label id="rangeWrap">題號範圍
+          <input id="rangeFrom" type="number" min="1" placeholder="起(如50)" style="width:90px" />
+          <span>—</span>
+          <input id="rangeTo" type="number" min="1" placeholder="迄(如100)" style="width:90px" />
+        </label>
+        <div class="searchBox" id="searchWrap">
+          <input id="searchInput" class="searchInput" type="text" placeholder="關鍵字（多字詞以空白分隔）">
+          <button class="btn secondary" id="searchBtn">搜尋</button>
+          <button class="btn secondary" id="clearSearchBtn">清除</button>
+        </div>
+        <label><input type="checkbox" id="toggleOriginal"> 顯示原始題號</label>
+        <button class="btn" id="startBtn">開始</button>
+        <button class="btn secondary" id="resetBtn">重置錯題/標記/統計</button>
+      </div>
+      <div class="row">
+        <div class="scoreBanner hidden" id="scoreBanner"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="quiz"></div>
+
+  <section class="card hidden" id="footerCard">
+    <div class="footer">
+      <div>
+        <button class="btn" id="prevBtn">上一題（←）</button>
+        <button class="btn" id="confirmBtn">確認（Enter）</button>
+        <button class="btn" id="nextBtn">下一題（→）</button>
+        <button class="btn mark" id="markBtn">標記此題</button>
+      </div>
+      <div>
+        <button class="btn" id="submitBtn">交卷（列出本次全部題）</button>
+        <button class="btn secondary" id="exportWrongBtn">匯出錯題ID</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const BANK = [{"id": 1, "question": "Question #1\nChoose the correct syntax to add a new host named “emailserver1” with IP address 10.50.23.90 using GAiA Management CLI?", "choices": ["mgmt._cli add host name “emailserver1” ip-address 10.50.23.90", "mgmt._cli add host “emailserver1” address 10.50.23.90", "mgmt._cli add host name “myHost12 ip” address 10.50.23.90", "mgmt._cli add host name ip-address 10.50.23.90"], "answer": 0, "answer_letter": "A"}, {"id": 2, "question": "Question #2\nWhich method below is NOT one of the ways to communicate using the Management API’s?", "choices": ["Typing API commands using Gaia’s secure shell (clish)", "Typing API commands from a dialog box inside the SmartConsole GUI application", "Sending API commands over an http connection using web-services", "Typing API commands using the “mgmt._cli” command"], "answer": 2, "answer_letter": "C"}, {"id": 3, "question": "Question #3\nWhich of the following is NOT a type of Check Point API available in R80.x?", "choices": ["Identity Awareness Web Services", "OPSEC SDK", "Management", "Mobile Access"], "answer": 3, "answer_letter": "D"}, {"id": 4, "question": "Question #4\nWhat API command below creates a new host object with the name “My Host” and IP address of “192.168.0.10”?", "choices": ["set host name “My Host” ip-address “192.168.0.10”", "create host name “My Host” ip-address “192.168.0.10”", "new host name “My Host” ip-address “192.168.0.10”", "mgmt_cli –m <mgmt ip> add host name “My Host” ip-address “192.168.0.10”"], "answer": 3, "answer_letter": "D"}, {"id": 5, "question": "Question #5\nWhat command veries that the API server is responding?", "choices": ["api stat", "show api_status", "api_get_status", "api status"], "answer": 3, "answer_letter": "D"}, {"id": 6, "question": "Question #6\nWhat are the different command sources that allow you to communicate with the API server?", "choices": ["API_cli Tool, Gaia CLI, Web Services", "SmartConsole GUI Console, API_cli Tool, Gaia CLI, Web Services", "SmartView Monitor, API_cli Tool, Gaia CLI, Web Services", "SmartConsole GUI Console, mgmt._cli Tool, Gaia CLI, Web Services"], "answer": 3, "answer_letter": "D"}, {"id": 7, "question": "Question #7\nAlice works for a big security outsourcing provider company and as she receives a lot of change requests per day she wants to use for scripting daily tasks the API services from Check Point for the Management API. Firstly, she needs to be aware if the API services are running for the management. Which of the following Check Point Command is true:", "choices": ["status mgmt api", "api mgmt status.", "status api", "api status"], "answer": 3, "answer_letter": "D"}, {"id": 8, "question": "Question #8\nWhat is correct statement about Security Gateway and Security Management Server failover in Check Point R81.X in terms of Check Point Redundancy driven solutions?", "choices": ["Security Gateway failover as well as Security Management Server failover is an automatic procedure.", "Security Gateway failover is an automatic procedure but Security Management Server failover is a manual procedure.", "Security Gateway failover is a manual procedure but Security Management Server failover is an automatic procedure.", "Security Gateway failover as well as Security Management Server failover is a manual procedure."], "answer": 1, "answer_letter": "B"}, {"id": 9, "question": "Question #9\nWhat is the most ideal Synchronization Status for Security Management Server High Availability deployment?", "choices": ["Never been synchronized", "Collision", "Synchronized", "Lagging"], "answer": 2, "answer_letter": "C"}, {"id": 10, "question": "Question #10\nWhat state is the Management HA in when both members have different policies/databases?", "choices": ["Lagging", "Never been synchronized", "Collision", "Synchronized"], "answer": 2, "answer_letter": "C"}, {"id": 11, "question": "Question #11\nYou are asked to check the status of several user-mode processes on the management server and gateway. Which of the following processes can only be seen on a Management Server?", "choices": ["cpd", "fwd", "cpwd", "fwm"], "answer": 3, "answer_letter": "D"}, {"id": 12, "question": "Question #12\nWhat is the command used to activate Multi-Version Cluster mode?", "choices": ["set mvc on in Clish", "set cluster member mvc on in Clish", "set cluster mvc on in Expert Mode", "set cluster MVC on in Expert Mode"], "answer": 1, "answer_letter": "B"}, {"id": 13, "question": "Question #13\nHow many versions, besides the destination version, are supported in a Multi-Version Cluster Upgrade?", "choices": ["4", "3", "2", "1"], "answer": 3, "answer_letter": "D"}, {"id": 14, "question": "Question #14\nWhich upgrade method you should use upgrading from R80.40 to R81.20 to avoid any downtime?", "choices": ["Multi-Version Cluster Upgrade (MVC)", "Zero Downtime Upgrade (ZDU)", "Connectivity Upgrade (CU)", "Minimal Effort Upgrade (ME)"], "answer": 0, "answer_letter": "A"}, {"id": 15, "question": "Question #15\nWhat are the main stages of a policy installation?", "choices": ["Initiation, Conversion and Save", "Initiation, Conversion and FWD REXEC", "Verication, Commit, Installation", "Verication, Compilation, Transfer and Commit"], "answer": 3, "answer_letter": "D"}, {"id": 16, "question": "Question #16\nWhat are valid Policy Types in R81.X?", "choices": ["Access Control, Threat Prevention, QoS, Desktop Security", "Access Control, IPS, Threat Emulation, NAT", "Access Control, IPS, QoS, DLP", "Access Control, RemoteAccess VPN, NAT, IPS"], "answer": 0, "answer_letter": "A"}, {"id": 17, "question": "Question #17\nAfter some changes in the rewall policy, you run into some issues. You want to test if the policy from two weeks ago has the same issue. You don't want to lose the changes from the last weeks. What is the best way to do it? and press the ‘Install specic version’ button Gateway, select the policy version from two weeks ago and press the ‘Install specic version’ button to this revision...’. select the revision from two weeks ago. Run the action ‘Revert to this revision...’ Restore the management snapshot.", "choices": ["In SmartConsole under Security Policies go to the Installation History view of the Gateway, select the policy version from two weeks ago", "Use the Gaia WebUI to take a backup of the Gateway. In SmartConsole under Security Policies go to the Installation History view of the", "In SmartConsole under Manage & Settings go to Sessions –> Revisions and select the revision from two weeks ago. Run the action ‘Revert", "Use the Gaia WebUI to take a snapshot of management. In the In SmartConsole under Manage & Settings go to Sessions -> Revisions and"], "answer": 2, "answer_letter": "C"}, {"id": 18, "question": "Question #18\nWhich Check Point process provides logging services, such as forwarding logs from Gateway to Log Server, providing Log Export API (LEA) & Event Logging API (ELA) services.", "choices": ["DASSERVICE", "FWD", "CPVIEWD", "CPD"], "answer": 1, "answer_letter": "B"}, {"id": 19, "question": "Question #19\nThe back-end database for Check Point Management uses:", "choices": ["PostgreSQL", "MongoDB", "MySQL", "DBMS"], "answer": 0, "answer_letter": "A"}, {"id": 20, "question": "Question #20\nWhere can you see and search records of action done by R80 SmartConsole administrators?", "choices": ["In SmartAudit Log View", "In Smartlog, all logs", "In the Logs & Monitor, logs, select “Audit Log View”", "In SmartView Tracker, open active log"], "answer": 2, "answer_letter": "C"}, {"id": 21, "question": "Question #21\nIdentity Awareness allows the Security Administrator to congure network access based on which of the following?", "choices": ["Name of the application, identity of the user, and identity of the machine", "Identity of the machine, username, and certicate", "Browser-Based Authentication, identity of a user, and network location", "Network location, identity of a user, and identity of a machine"], "answer": 3, "answer_letter": "D"}, {"id": 22, "question": "Question #22\nWhile enabling the Identity Awareness blade the Identity Awareness wizard does not automatically detect the windows domain. Why does it not detect the windows domain?", "choices": ["Security Gateway is not part of the Domain", "SmartConsole machine is not part of the domain", "Identity Awareness is not enabled on Global properties", "Security Management Server is not part of the domain"], "answer": 1, "answer_letter": "B"}, {"id": 23, "question": "Question #23\nWhich of the following is NOT a method used by Identity Awareness for acquiring identity?", "choices": ["Remote Access", "Active Directory Query", "Cloud IdP (Identity Provider)", "RADIUS"], "answer": 2, "answer_letter": "C"}, {"id": 24, "question": "Question #24\nIdentity Awareness lets an administrator easily congure network access and auditing based on three times. Choose the correct statement.", "choices": ["Network location, the identity of a user and the identity of a machine.", "Geographical location, the identity of a user and the identity of a machine.", "Network location, the identity of a user and the active directory membership.", "Network location, the telephone number of a user and the UID of a machine."], "answer": 0, "answer_letter": "A"}, {"id": 25, "question": "Question #25\nFill in the blanks. Default port numbers for an LDAP server is _______ for standard connections and _______ SSL connections.", "choices": ["443; 389", "636; 8080", "290; 3389", "389; 636"], "answer": 3, "answer_letter": "D"}, {"id": 26, "question": "Question #26\nBy default, what information is NOT collected from a Security Gateway in a CPINFO?", "choices": ["OS and Network Statistics", "Conguration and database les", "Firewall logs", "System message logs"], "answer": 2, "answer_letter": "C"}, {"id": 27, "question": "Question #27\nWhat command can you use to have cpinfo display all installed hotxes?", "choices": ["cpinfo-hf", "cpinfo installed_jumbo", "cpinfo –get hf", "cpinfo –y all"], "answer": 3, "answer_letter": "D"}, {"id": 28, "question": "Question #28\nWhich command collects diagnostic data for analyzing a customer setup remotely?", "choices": ["cpv", "cpinfo", "migrate export", "sysinfo"], "answer": 1, "answer_letter": "B"}, {"id": 29, "question": "Question #29\nBy default, what type of rules in the Access Control rulebase allow the control connections?", "choices": ["Implicit Rules", "Explicitly Implied Rules", "Implied Rules", "Explicit Rules"], "answer": 2, "answer_letter": "C"}, {"id": 30, "question": "Question #30\nCheck Point Support in many cases asks you for a conguration summary of your Check Point system. This is also called:", "choices": ["sysinfo", "cpsizeme", "cpinfo", "cpexport"], "answer": 2, "answer_letter": "C"}, {"id": 31, "question": "Question #31\nWhat is the name of the secure application for Mail/Calendar for mobile devices?", "choices": ["Secure Workspace", "Capsule Mail", "Capsule Workspace", "Capsule VPN"], "answer": 2, "answer_letter": "C"}, {"id": 32, "question": "Question #32\nWhat is the difference between SSL VPN and IPSec VPN?", "choices": ["SSL VPN requires installation of a resilient VPN client", "SSL VPN and IPSec VPN are the same", "IPSec VPN does not require installation of a resident VPN client", "IPSec VPN requires installation of a resident VPN client and SSL VPN requires only an installed Browser"], "answer": 3, "answer_letter": "D"}, {"id": 33, "question": "Question #33\nWhich Remote Access Client does not provide an Oce-Mode Address?", "choices": ["Endpoint Security Suite", "Check Point Mobile", "SecuRemote", "Endpoint Security VPN"], "answer": 2, "answer_letter": "C"}, {"id": 34, "question": "Question #34\nWhich feature allows Remote-access VPN users to access resources across a site-to-site VPN tunnel?", "choices": ["Mobile Access VPN Domain", "Community Specic VPN Domain", "Remote Access VPN Switch", "Network Access VPN Domain"], "answer": 1, "answer_letter": "B"}, {"id": 35, "question": "Question #35\nSSL Network Extender (SNX) is a thin SSL VPN on-demand client that is installed on the remote user’s machine via the web browser. What are the two modes of SNX?", "choices": ["Network and Layers", "Application and Client Service", "Network and Application", "Virtual Adapter and Mobile App"], "answer": 2, "answer_letter": "C"}, {"id": 36, "question": "Question #36\nWhich one of the following is true about Capsule Connect?", "choices": ["It is a full layer 3 VPN client", "It is supported only on iOS phones and Windows PCs", "It offers full enterprise mobility management", "It does not support all VPN authentication methods"], "answer": 0, "answer_letter": "A"}, {"id": 37, "question": "Question #37\nWhich Mobile Access Application allows a secure container on Mobile devices to give users access to internal website, le share and emails?", "choices": ["Check Point Capsule Workspace", "Check Point Capsule Remote", "Check Point Mobile Web Portal", "Check Point Remote User"], "answer": 0, "answer_letter": "A"}, {"id": 38, "question": "Question #38\nWhich Mobile Access Solution is clientless?", "choices": ["Mobile Access Portal", "Checkpoint Mobile", "Endpoint Security Suite", "SecuRemote"], "answer": 0, "answer_letter": "A"}, {"id": 39, "question": "Question #39\nThe Log server sends what to the Correlation Unit?", "choices": ["Authentication requests", "Event Policy", "Logs", "CPMI dbsync"], "answer": 2, "answer_letter": "C"}, {"id": 40, "question": "Question #40\nWhat is the recommended conguration when the customer requires SmartLog indexing for 14 days and SmartEvent to keep events for 180 days?", "choices": ["Choose different setting for log storage and SmartEvent db", "It is not possible", "Install Management and SmartEvent on different machines", "Use Multi-Domain Management Server"], "answer": 0, "answer_letter": "A"}, {"id": 41, "question": "Question #41\nWhat are the two types of tests when using the Compliance blade?", "choices": ["Tests conducted based on the IoC XML le and analysis of SOLR documents", "Access Control policy analysis and Threat Prevention policy analysis", "Policy-based tests and Global properties", "Global tests and Object-based tests"], "answer": 3, "answer_letter": "D"}, {"id": 42, "question": "Question #42\nWhich of the following statements about SecureXL NAT Templates is true? rulebase so that similar new connections can take advantage of this information and do NAT without the expensive rulebase lookup. These are disabled by default and work only if Accept Templates are disabled. rulebase so that similar new connections can take advantage of this information and do NAT without the expensive rulebase lookup. These are enabled by default and work only if Accept Templates are enabled. by rulebase so that similar new connections can take advantage of this information and do NAT without the expensive rulebase lookup. These are disabled by default and work only if NAT Templates are disabled. rulebase so that similar new connections can take advantage of this information and do NAT without the expensive rulebase lookup. These are disabled by default and work only if NAT Templates are disabled.", "choices": ["NAT Templates are generated to achieve high session rate for NAT. These templates store the NAT attributes of connections matched by", "NAT Templates are generated to achieve high session rate for NAT. These templates store the NAT attributes of connections matched by", "ACCEPT Templates are generated to achieve high session rate for NAT. These templates store the NAT attributes of connections matched", "DROP Templates are generated to achieve high session rate for NAT. These templates store the NAT attributes of connections matched by"], "answer": 1, "answer_letter": "B"}, {"id": 43, "question": "Question #43\nIn what way is Secure Network Distributor (SND) a relevant feature of the Security Gateway?", "choices": ["SND is used to distribute packets among Firewall instances", "SND is a feature to accelerate multiple SSL VPN connections", "SND is a feature of fw monitor to capture accelerated packets", "SND is an alternative to IPSec Main Mode, using only 3 packets."], "answer": 0, "answer_letter": "A"}, {"id": 44, "question": "Question #44\nWhich statement is most correct regarding about “CoreXL Dynamic Dispatcher’?", "choices": ["The CoreXL FW instances assignment mechanism is based on IP Protocol type.", "The CoreXL FW instances assignment mechanism is based on the utilization of CPU cores", "The CoreXL FW instances assignment mechanism is based on Source MAC addresses, Destination MAC addresses", "The CoreXL FW instances assignment mechanism is based on Source IP addresses, Destination IP addresses, and the IP ‘Protocol’ type."], "answer": 1, "answer_letter": "B"}, {"id": 45, "question": "Question #45\nWhat kind of information would you expect to see when using the “sim anity –I” command?", "choices": ["Overview over SecureXL templated connections", "The VMACs used in a Security Gateway cluster", "Anity Distribution", "The involved rewall kernel modules in inbound and outbound packet chain"], "answer": 2, "answer_letter": "C"}, {"id": 46, "question": "Question #46\nCoreXL is NOT supported when one of the following features is enabled:", "choices": ["Overlapping NAT", "Route-based VPN", "IPv6", "IPS"], "answer": 0, "answer_letter": "A"}, {"id": 47, "question": "Question #47\nWhat are the three SecureXL Templates available in R81.10?", "choices": ["Accept Templates, Drop Templates, NAT Templates", "PEP Templates, QoS Templates, VPN Templates", "Accept Templates, PDP Templates, PEP Templates", "Accept Templates, Drop Templates, Reject Templates"], "answer": 0, "answer_letter": "A"}, {"id": 48, "question": "Question #48\nWhat is the correct description for the Dynamic Balancing / Spit feature? Quantum Appliances (not on Quantum Spark or Open Server) Queue. It is only available on Quantum Appliances (not on Quantum Spark or Open Server) Quantum Appliances and Open Server (not on Quantum Spark) Queue. It is only available on Quantum Appliances and Open Server (not on Quantum Spark)", "choices": ["Dynamic Balancing / Split dynamically change the number of SND's and rewall instances based on the current load. It is only available on", "Dynamic Balancing / Split dynamically distribute the trac from one network interface to multiple SND’s. The interface must support Multi", "Dynamic Balancing / Split dynamically change the number of SND’s and rewall instances based on the current load. It is only available on", "Dynamic Balancing / Spit dynamically distribute the trac from one network interface to multiple SND’s. The interface must support Multi"], "answer": 0, "answer_letter": "A"}, {"id": 49, "question": "Question #49\nWhich statement is WRONG regarding the usage of the Central Deployment in SmartConsole?", "choices": ["Only Hotxes can be installed with the Central Deployment in SmartConsole", "You can install Hotxes with the Central Deployment in SmartConsole", "You can upgrade your cluster without user intervention with the Central Deployment in SmartConsole from R80.40 to R81.20.", "You can install Jumbo Hotx accumulators with the Central Deployment in SmartConsole."], "answer": 0, "answer_letter": "A"}, {"id": 50, "question": "Question #50\nWhat is false regarding prerequisites for the Central Deployment usage? Most Voted", "choices": ["The Security Gateway must have a policy installed", "The administrator must have write permission on SmartUpdate", "No need to establish SIC between gateways and the management server, since the CDT tool will take care about SIC automatically", "Security Gateway must have the latest CPUSE Deployment Agent"], "answer": 2, "answer_letter": "C"}, {"id": 51, "question": "Question #51\nThe installation of a package via SmartConsole CANNOT be applied on", "choices": ["A single Security Gateway", "A full Security Cluster (All Cluster Members included)", "Multiple Security Gateways and/or Clusters", "R81.20 Security Management Server"], "answer": 3, "answer_letter": "D"}, {"id": 52, "question": "Question #52\nWhat is the purpose of the command “ps aux | grep fwd”?", "choices": ["You can check whether the IPS default setting is set to Detect or Prevent mode", "You can check the Process ID and the processing time of the fwd process.", "You can convert the log le into Post Script format.", "You can list all Process IDs for all running services."], "answer": 1, "answer_letter": "B"}, {"id": 53, "question": "Question #53\nWhich of these statements describes the Check Point ThreatCloud?", "choices": ["Blocks or limits usage of web applications", "Prevents or controls access to web sites based on category", "A worldwide collaborative security network", "Prevents Cloud vulnerability exploits"], "answer": 2, "answer_letter": "C"}, {"id": 54, "question": "Question #54\nUsing Web Services to access the API, which Header Name/Value had to be in the HTTP Post request after the login?", "choices": ["uuid Universally Unique Identier", "API-Key", "user-uid", "X-chkp-sid Session Unique Identier"], "answer": 3, "answer_letter": "D"}, {"id": 55, "question": "Question #55\nWhat command would show the API server status?", "choices": ["api status", "show api status", "cpm status", "api restart"], "answer": 0, "answer_letter": "A"}, {"id": 56, "question": "Question #56\nWhat could NOT be a reason for synchronization issues in a Management HA environment? server.", "choices": ["Hardware clocks do not match even with adjustments for different time zones", "Accidentally, you have congured unique IP addresses per Management Server which invalidates the CA Certicate", "There is a network connectivity failure between the servers", "The products installed on the servers do not match: one device is a Standalone Server while the other is only a Security Management"], "answer": 1, "answer_letter": "B"}, {"id": 57, "question": "Question #57\nWhat order should be used when upgrading a Management High Availability Cluster?", "choices": ["Secondary Management, then Primary Management", "Active Management, then Standby Management", "Standby Management, then Active Management", "Primary Management, then Secondary Management"], "answer": 3, "answer_letter": "D"}, {"id": 58, "question": "Question #58\nYou need to see which hotxes are installed on your Check Point server, which command would you use?", "choices": ["cpinfo –h all", "cpinfo –o hotx", "cpinfo –y all", "cpinfo –I hotx"], "answer": 2, "answer_letter": "C"}, {"id": 59, "question": "Question #59\nWhat mechanism can ensure that the Security Gateway can communicate with the Management Server with ease in situations with overwhelmed network resources?", "choices": ["There is a feature for ensuring stable connectivity to the management server and is done via Priority Queuing.", "The corresponding feature is new to R81.10 and is called “Management Data Plane Separation”", "The corresponding feature is called “Dynamic Split”", "The corresponding feature is called “Dynamic Dispatching”"], "answer": 1, "answer_letter": "B"}, {"id": 60, "question": "Question #60\nWhich process is used mainly for backward compatibility of gateways in R80.x and newer? It provides communication with GUI-client, database manipulation, policy compilation and Management HA synchronization.", "choices": ["cpm", "fwd", "cpd", "fwm"], "answer": 3, "answer_letter": "D"}, {"id": 61, "question": "Question #61\nWhat component of Management is used for indexing?", "choices": ["fwm", "SOLR", "API Server", "DBSync"], "answer": 1, "answer_letter": "B"}, {"id": 62, "question": "Question #62\nWhat is the responsibility of SOLR process on the management server?", "choices": ["Validating all data before it’s written into the database", "It generates indexes of data written to the database", "Communication between SmartConsole applications and the Security Management Server", "Writing all information into the database"], "answer": 1, "answer_letter": "B"}, {"id": 63, "question": "Question #63\nWhat is the difference between Updatable Objects and Dynamic Objects locally. In both cases there is no need to install policy for the changes to take effect. to take effect. Updatable Objects are created and maintained locally. locally. For Dynamic Objects there is no need to install policy for the changes to take effect. there is no need to install policy for the changes to take effect.", "choices": ["Updatable Objects is a Threat Cloud Service. The provided Objects are updated automatically. Dynamic Objects are created and maintained", "Dynamic Objects are maintained automatically by the Threat Cloud. For Dynamic Objects there is no need to install policy for the changes", "Updatable Objects is a Threat Cloud Service. The provided Objects are updated automatically. Dynamic Objects are created and maintained", "Dynamic Objects are maintained automatically by the Threat Cloud. Updatable Objects are created and maintained locally. In both cases"], "answer": 0, "answer_letter": "A"}, {"id": 64, "question": "Question #64\nWhich process handles connections from SmartConsole R80?", "choices": ["cpm", "cpd", "cpmd", "fwd"], "answer": 0, "answer_letter": "A"}, {"id": 65, "question": "Question #65\nIdentity Awareness allows easy conguration for network access and auditing based on what three items?", "choices": ["Client machine IP address.", "Network location, the identity of a user and the identity of a machine", "Log server IP address.", "Gateway proxy IP address."], "answer": 1, "answer_letter": "B"}, {"id": 66, "question": "Question #66\nWhich of the following cannot be congured in an Access Role Object?", "choices": ["Networks", "Machines", "Users", "Time"], "answer": 3, "answer_letter": "D"}, {"id": 67, "question": "Question #67\nFill in the blank: RADIUS protocol uses ______ to communicate with the gateway.", "choices": ["TDP", "CCP", "HTTP", "UDP"], "answer": 3, "answer_letter": "D"}, {"id": 68, "question": "Question #68\nWhich of the following is NOT a component of a Distinguished Name?", "choices": ["Common Name", "Country", "User container", "Organizational Unit"], "answer": 2, "answer_letter": "C"}, {"id": 69, "question": "Question #69\nUsing Threat Emulation technologies, what is the best way to block .exe and .bat le types?", "choices": ["Enable .exe bat protection in IPS Policy", "tecli advanced attributes set prohibited_le_types exe, bat", "create FW rule for particular protocol", "enable DLP and select .exe and .bat le type"], "answer": 1, "answer_letter": "B"}, {"id": 70, "question": "Question #70\nA user complains that some Internet resources are not available. The Administrator is having issues seeing if packets are being dropped at the rewall (not seeing drops in logs). What is the solution to troubleshoot the issue?", "choices": ["run “fw ctl zdebug drop” on the relevant gateway", "run “cpstop” on the relevant gateway and check the ping again", "run “fw unloadlocal” on the relevant gateway and check the ping again", "run “fw log” on the relevant gateway"], "answer": 0, "answer_letter": "A"}, {"id": 71, "question": "Question #71\nWhich command will reset the kernel debug options to default settings?", "choices": ["fw ctl dbg –a 0", "fw ctl debug set 0", "fw ctl debug 0", "fw ctl dbg resetall"], "answer": 2, "answer_letter": "C"}, {"id": 72, "question": "Question #72\nWhich Operating Systems are supported for the Endpoint Security VPN?", "choices": ["Windows and Red Hat Linux", "Windows and SPARC Solaris", "Windows and x86 Solaris", "Windows and macOS computers"], "answer": 3, "answer_letter": "D"}, {"id": 73, "question": "Question #73\nAlice knows about the Check Point Management HA installation from Bob and needs to know which Check Point Security Management Server is currently capable of issuing and managing certicate. Alice uses the Check Point command “cpcong” to run the Check Point Security Management Server conguration tool on both Check Point Management HA instances “Primary & Secondary”. Which conguration option does she need to look for?", "choices": ["Certicate's Fingerprint", "Random Pool", "Certicate Authority", "CA Authority"], "answer": 2, "answer_letter": "C"}, {"id": 74, "question": "Question #74\nIs it possible to establish a VPN before the user login to the Endpoint Client. endpoint_vpn_remember_user_password attribute in the trac_client_1.ttm le located in the $FWDIR/conf directory on the Security Gateway endpoint_vpn_always_connected attribute in the trac_client_1.ttm le located in the $FWDIR/conf directory on the Security Gateway", "choices": ["Yes, you had to set neo_remember_user_password to true in the trac.defaults of the Remote Access Client or you can use the", "Yes, you had to set neo_always_connected to true in the trac.defaults of the Remote Access Client or you can use the", "No, the user must login rst.", "Yes, you have to enable Machine Authentication in the Gateway object of the Smart Console"], "answer": 3, "answer_letter": "D"}, {"id": 75, "question": "Question #75\nMobile Access Gateway can be congured as a reverse proxy for Internal Web Applications. Reverse proxy users browse to a URL that is resolved to the Security Gateway IP address. Which of the following Check Point command is true for enabling the Reverse Proxy:", "choices": ["ReverseProxy", "ReverseCLIProxy", "ReverseProxyCLI", "ProxyReverseCLI"], "answer": 2, "answer_letter": "C"}, {"id": 76, "question": "Question #76\nCapsule Connect and Capsule Workspace both offer secured connection for remote users who are using their mobile devices. However, there are differences between the two. Which of the following statements correctly identify each product’s capabilities? and MDM cooperative enforcement. Time Password login support as well as SSO for specic applications.", "choices": ["For compliance/host checking, Workspace offers the MDM cooperative enforcement, whereas Connect offers both jailbreak/root detection", "Workspace can support any application, whereas Connect has a limited number of application types which it will support", "Workspace supports iOS, Android, and WP8, whereas Connect supports iOS and Android only", "For credential protection, Connect uses One-time Password login support, but has no SSO support, whereas Workspace offers both One"], "answer": 3, "answer_letter": "D"}, {"id": 77, "question": "Question #77\nWhat are the two modes for SNX (SSL Network Extender)?", "choices": ["Network Mode and Hub Mode", "Network Mode and Application Mode", "Visitor Mode and Oce Mode", "Oce Mode and Hub Moe"], "answer": 1, "answer_letter": "B"}, {"id": 78, "question": "Question #78\nNative Applications require a thin client under which circumstances?", "choices": ["If you want to have assigned a particular Oce Mode IP address", "If you are about to use a client (FTP, RDP, ...) that is installed on the endpoint.", "If you want to use a VPN Client that is not ocially supported by the underlying operating system", "If you want to use a legacy 32-Bit Windows OS"], "answer": 1, "answer_letter": "B"}, {"id": 79, "question": "Question #79\nIn SmartConsole, where do you manage your Mobile Access Policy?", "choices": ["Through the Mobile Console", "Shared Gateways Policy", "From the Dedicated Mobility Tab", "Smart Dashboard"], "answer": 3, "answer_letter": "D"}, {"id": 80, "question": "Question #80\nYou have used the SmartEvent GUI to create a custom Event policy. What is the best way to display the correlated Events generated by SmartEvent Policies?", "choices": ["In the SmartConsole / Logs & Monitor –> open the Logs View and use type:Correlated as query lter.", "Select the Events tab in the SmartEvent GUI or use the Events tab in the SmartView web interface.", "Open SmartView Monitor and select the SmartEvent Window from the main menu.", "In the SmartConsole / Logs & Monitor –> open a new Tab and select External Apps / SmartEvent."], "answer": 0, "answer_letter": "A"}, {"id": 81, "question": "Question #81\nWhen detected, an event can activate an Automatic Reaction. The SmartEvent administrator can create and congure one Automatic Reaction, or many, according to the needs of the system. Which of the following statement is false and NOT part of possible automatic reactions:", "choices": ["Syslog", "SNMP Trap", "Mail", "Block Source"], "answer": 0, "answer_letter": "A"}, {"id": 82, "question": "Question #82\nWhat are possible Automatic Reactions in SmartEvent?", "choices": ["Web Mail, Forward to SandBlast Appliance, SNMP Trap, External Script", "Web Mail, Block Service, SNMP Trap, SmartTask, Geo Protection", "Web Mail, Block Destination, SNMP Trap, SmartTask", "Mail, SNMP Trap, Block Source, Block Event Activity, External Script"], "answer": 3, "answer_letter": "D"}, {"id": 83, "question": "Question #83\nWhich command can you use to enable or disable multi-queue per interface?", "choices": ["Cpmqueue set", "Set cpmq enable", "Cpmq cong", "cpmq set"], "answer": 3, "answer_letter": "D"}, {"id": 84, "question": "Question #84\nWhat is Dynamic Balancing? maximizing the session rate.", "choices": ["It is a feature that uses a daemon to balance the required number of rewall instances and SNDs based on the current load", "It is a ClusterXL feature that switches an HA cluster into an LS cluster if required to maximize throughput.", "It is a CoreXL feature that assigns the SND to network interfaces to balance the RX Cache of the interfaces", "It is a new feature that is capable of dynamically reserve the amount of Hash kernel memory to reect the resource usage necessary for"], "answer": 0, "answer_letter": "A"}, {"id": 85, "question": "Question #85\nWhich is the command to identify the NIC driver before considering about the employment of the Multi-Queue feature?", "choices": ["ip show int eth0", "show interface eth0 mq", "ifcong –i eth0 verbose", "ethtool –i eth0"], "answer": 3, "answer_letter": "D"}, {"id": 86, "question": "Question #86\nWhat is the minimum number of CPU cores required to enable CoreXL?", "choices": ["2", "1", "4", "6"], "answer": 0, "answer_letter": "A"}, {"id": 87, "question": "Question #87\nWhat does Backward Compatibility mean upgrading the Management Server and how can you check it? Release Notes Installation and Upgrade Guide", "choices": ["The Management Server is able to manage older Gateways. The lowest supported version in the Installation and Upgrade Guide", "The Management Server is able to manage older Gateways. The lowest supported version is documented in the Release Notes", "You will be able to connect to older Management Server with the SmartConsole. The lowest supported version is documented in the", "You will be able to connect to older Management Server with the SmartConsole. The lowest supported version is documented in the"], "answer": 1, "answer_letter": "B"}, {"id": 88, "question": "Question #88\nHow can you switch the active log le?", "choices": ["Run fw logswitch on the Management Server", "Run fwm logswitch on the Management Server", "Run fw logswitch on the gateway", "Run fwm logswitch on the gateway"], "answer": 0, "answer_letter": "A"}, {"id": 89, "question": "Question #89\nWhat destination versions are supported for a Multi-Version Cluster Upgrade?", "choices": ["R77.30 and later", "R80.10 and Later", "R70 and Later", "R76 and later"], "answer": 1, "answer_letter": "B"}, {"id": 90, "question": "Question #90\nWhich command can you use to verify the number of active concurrent connections?", "choices": ["fw conn all", "show all connections", "fw ctl pstat", "show connections"], "answer": 2, "answer_letter": "C"}, {"id": 91, "question": "Question #91\nUnder which le is the proxy arp conguration stored?", "choices": ["$FWDIR/state/_tmp/proxy.arp on the security gateway", "$FWDIR/conf/local.arp on the management server", "$FWDIR/conf/local.arp on the gateway", "$FWDIR/state/proxy_arp.conf on the management server"], "answer": 2, "answer_letter": "C"}, {"id": 92, "question": "Question #92\nWhat are the correct steps upgrading a HA cluster (M1 is active, M2 is passive) using Multi-Version Cluster(MVC)Upgrade? 2) Upgrade the passive node M2 to R81.20 3) Enable the MVC mechanism on the upgraded R81.20 Cluster Member M2 in CLISH: set cluster member mvc on 4) Install the Access Control Policy and make sure that the installation will not stop if installation on one cluster member fails 5) After examine the cluster states upgrade node M1 to R81.20 6) On each Cluster Member, disable the MVC mechanism and Install the Access Control Policy SmartConsole, change the version of the cluster object, 2) Upgrade the passive node M2 to R81.20 3) In SmartConsole, change the version of the cluster object 4) Install the Access Control Policy 5) After examine the cluster states upgrade node M1 to R81.20 6) On each Cluster Member, disable the MVC mechanism and Install the Access Control Policy 2) Upgrade the passive node M2 to R81.20 3) In SmartConsole, change the version of the cluster object 4) Install the Access Control Policy and make sure that the installation will not stop if installation on one cluster member fails 5) After examine the cluster states upgrade node M1 to R81.20 6) On each Cluster Member, disable the MVC mechanism 2) Enable the MVC mechanism on the upgraded R81.20 Cluster Member M2 #cphaconf mvc on 3) In SmartConsole, change the version of the cluster object 4) Install the Access Control Policy 5) After examine the cluster states upgrade node M1 to R81.20 6) On each Cluster Member, disable the MVC mechanism and Install the Access Control Policy upgrade the passive node M2 to R81.20", "choices": ["1) In SmartConsole, change the version of the cluster object", "1) Enable the MVC mechanism on both cluster members #cphaprob mvc on", "1) Enable the MVC mechanism on both cluster members in CLISH: set cluster member mvc on", "1) Upgrade the passive node M2 to R81.20"], "answer": 0, "answer_letter": "A"}, {"id": 93, "question": "Question #93\nYou pushed a policy to your gateway, and you cannot access the gateway remotely anymore. What command should you use to remove the policy from the gateway by logging in through console access?", "choices": ["“fw unloadpolicy”", "“fw unloadlocal”", "“fw cpstop”", "“fw undo”"], "answer": 1, "answer_letter": "B"}, {"id": 94, "question": "Question #94\nWhich command would disable a Cluster Member permanently?", "choices": ["clusterXL_admin_down", "cphaprob_admin down", "clusterXL_admin down –p", "set clusterXL down –p"], "answer": 2, "answer_letter": "C"}, {"id": 95, "question": "Question #95\nWhile using the Gaia CLI, what is the correct command to publish changes to the management server?", "choices": ["json publish", "mgmt publish", "mgmt._cli commit", "commit"], "answer": 1, "answer_letter": "B"}, {"id": 96, "question": "Question #96\nThe fwd process on the Security Gateway sends logs to the fwd process on the Management Server, where it is forwarded to ______ via ______.", "choices": ["cpm, cpd", "cpwd, fwssd", "fwm, cpd", "cpd, fwm"], "answer": 0, "answer_letter": "A"}, {"id": 97, "question": "Question #97\nWhich TCP port does the CPM process listen on?", "choices": ["19009", "18191", "8983", "18190"], "answer": 0, "answer_letter": "A"}, {"id": 98, "question": "Question #98\nWhat command is used to manually failover a cluster during a zero-downtime upgrade?", "choices": ["clusterXL_admin down", "set cluster member down", "cpstop", "set clusterXL down"], "answer": 0, "answer_letter": "A"}, {"id": 99, "question": "Question #99\nWhich of the following is an identity acquisition method that allows a Security Gateway to identify Active Directory users and computers?", "choices": ["UserCheck", "User Directory Query", "Account Unit Query", "Active Directory Query"], "answer": 3, "answer_letter": "D"}, {"id": 100, "question": "Question #100\nFill in the blank: Browser-based Authentication sends users to a web page to acquire identities using _______.", "choices": ["UserCheck", "User Directory", "Captive Portal and Transparent Kerberos Authentication", "Captive Portal"], "answer": 3, "answer_letter": "D"}, {"id": 101, "question": "Question #101\nWhich User-mode process is responsible for the FW CLI commands?", "choices": ["cpm", "cpd", "fwm", "fwd"], "answer": 3, "answer_letter": "D"}, {"id": 102, "question": "Question #102\nAaron is a Cyber Security Engineer working for Global Law Firm with large scale deployment of Check Point Enterprise Appliances running GAiA R80.X. The Network Security Developer Team is having an issue testing the API with a newly deployed R80.X Security Management Server. Aaron wants to conrm API services are working properly. What should he do rst? start”. start\". start\".", "choices": ["Aaron should check API Server status with “api status\" from Expert mode. If services are stopped, he should start them with “api start\".", "Aaron should check API Server status with “cpapi status\" from Expert mode. If services are stopped, he should start them with \"cpapi", "Aaron should check API Server status with “fwm api status” from Expert mode. If services are stopped, he should start them with “fwm api", "Aaron should check API Server status with \"cpm api status” from Expert mode. If services are stopped, he should start them with “cpi api"], "answer": 0, "answer_letter": "A"}, {"id": 103, "question": "Question #103\nFor Management High Availability, which of the following is NOT a valid synchronization status?", "choices": ["Collision", "Lagging", "Never been synchronized", "Down"], "answer": 3, "answer_letter": "D"}, {"id": 104, "question": "Question #104\nIf the Active Security Management Server falls or if it becomes necessary to change the Active to Standby, the following steps must be taken to prevent data loss. Providing the Active Security Management Server is responsive, which if these steps should NOT be performed:", "choices": ["Rename the hostname of the Standby member to match exactly the hostname of the Active member.", "Change the Active Security Management Server to Standby.", "Manually synchronize the Active and Standby Security Management Servers.", "Change the Standby Security Management Server to Active."], "answer": 0, "answer_letter": "A"}, {"id": 105, "question": "Question #105\nWhat should the admin do in case the Primary Management Server is temporary down? Most Voted", "choices": ["Run the ‘promote_util’ to activate the Secondary Management server.", "The Secondary will take over automatically. Change the IP in SmartConsole to logon to the private IP of the Secondary Management Server.", "Use the VIP in SmartConsole you always reach the active Management Server.", "Logon with SmartConsole to the Secondary Management Server and choose ‘Make Active’ under Actions in the HA Management Menu."], "answer": 3, "answer_letter": "D"}, {"id": 106, "question": "Question #106\nAlice & Bob are going to use Management Data Plane Separation and therefore the routing separation needs to be enabled. Which of the following command is true for enabling the Management Data Plane Separation (MDPS):", "choices": ["set mdps split brain on", "set mdps data plane off", "set mdps mgmt plane on", "set mdps split plane on"], "answer": 2, "answer_letter": "C"}, {"id": 107, "question": "Question #107\nCheck Point Management (cpm) is the main management process in that it provides the architecture for a consolidated management console. It empowers the migration from legacy Client-side logic to Server-side logic. The cpm process", "choices": ["Performs database tasks such as creating, deleting, and modifying objects and compiling policy.", "Allows SmartConsole to communicate over TCP Port 19001", "Performs database tasks such as creating, deleting, and modifying objects and indexing logs", "Allows SmartConsole to communicate over TCP Port 18190"], "answer": 0, "answer_letter": "A"}, {"id": 108, "question": "Question #108\nWhich Check Point daemon invokes and monitors critical processes and attempts to restart them if they fail?", "choices": ["cpm", "cpwd", "fwm", "cpd"], "answer": 1, "answer_letter": "B"}, {"id": 109, "question": "Question #109\nJohn is using Management H", "choices": ["Primary Log Server", "connect virtual IP of Smartcenter HA", "active SmartConsole", "secondary Smartcenter"], "answer": 2, "answer_letter": "C"}, {"id": 110, "question": "Question #110\nWhat is the biggest benet of policy layers?", "choices": ["To break one policy into several virtual policies.", "To include Threat Prevention as a sub policy for the rewall policy", "Policy Layers and Sub-Policies enable exible control over the security policy", "They improve the performance on OS kernel version 3.0"], "answer": 2, "answer_letter": "C"}, {"id": 111, "question": "Question #111\nWhat is “Accelerated Policy Installation”? Topic 1", "choices": ["Starting R81, the QoS Policy installation process is accelerated thereby reducing the duration of the process signicantly", "Starting in R81, the Threat Prevention Policy installation process is accelerated thereby reducing the duration of the process signicantly", "Starting R81, the Desktop Security Policy installation process is accelerated thereby reducing the duration of the process signicantly", "Starting R81, the Access Control Policy installation process is accelerated thereby reducing the duration of the process signicantly"], "answer": 3, "answer_letter": "D"}, {"id": 112, "question": "Question #112\nName the authentication method that requires token authenticator.", "choices": ["SecureID", "DynamicID", "Radius", "TACACS"], "answer": 0, "answer_letter": "A"}, {"id": 113, "question": "Question #113\nFill in the blank. With the User Directory Software Blade, you can create user denitions on a(n)_______ Server.", "choices": ["SecurID", "NT domain", "LDAP", "SMTP"], "answer": 2, "answer_letter": "C"}, {"id": 114, "question": "Question #114\nAccess roles allow the rewall administrator to congure network access according to:", "choices": ["a combination of computer or computer groups and networks.", "All of the above.", "remote access clients.", "users and user groups."], "answer": 1, "answer_letter": "B"}, {"id": 115, "question": "Question #115\nWhich of the following is NOT a type of Endpoint Identity Agent?", "choices": ["Custom", "Full", "Terminal", "Light"], "answer": 2, "answer_letter": "C"}, {"id": 116, "question": "Question #116\nWhat object type would you use to grant network access to an LDAP user group?", "choices": ["Access Role", "Group Template", "SmartDirectory Group", "User Group"], "answer": 3, "answer_letter": "D"}, {"id": 117, "question": "Question #117\nWhich Identity Source(s) should be selected in Identity Awareness for when there is a requirement for a higher level of security for sensitive servers?", "choices": ["Endpoint Identity Agent and Browser-Based Authentication", "AD Query", "Terminal Servers Endpoint Identity Agent", "RADIUS and Account Logon"], "answer": 0, "answer_letter": "A"}, {"id": 118, "question": "Question #118\nWhich le contains the host address to be published, the MAC address that needs to be associated with the API address, and the unique IP of the interface that responds to ARP request?", "choices": ["/opt/CP-shrd-R80/conf/local.arp", "$FWDIR/conf/local.arp", "$CPDIR/conf/local.arp", "/var/opt/CPshrd-R80/conf/local.arp"], "answer": 1, "answer_letter": "B"}, {"id": 119, "question": "Question #119\nWhich command shows only the table names of all kernel tables?", "choices": ["fw tab –t", "fw tab –n", "fw tab –s", "fw tab –k"], "answer": 2, "answer_letter": "C"}, {"id": 120, "question": "Question #120\nWhich command lists all tables in Gaia?", "choices": ["fw tab –s", "fw tab –list", "fw tab –t", "fw tab –l"], "answer": 0, "answer_letter": "A"}, {"id": 121, "question": "Question #121\nWhich command is used to display status information for various components?", "choices": ["show sysenrv all", "show all systems", "show system messages", "sysmess all"], "answer": 0, "answer_letter": "A"}, {"id": 122, "question": "Question #122\nWhere is the license for Check Point Module users installed?", "choices": ["The Primary Gateway", "The Standby Gateway", "The Endpoint Server", "The Security Management Server"], "answer": 3, "answer_letter": "D"}, {"id": 123, "question": "Question #123\nSecure Conguration Verication (SCV) makes sure that remote access client computers are congured in accordance with the enterprise Security Policy. Bob was asked by Alice to implement a specic SCV conguration but therefore Bob needs to edit and congure a specic Check Point le. Which location le and directory is true?", "choices": ["$CPDIR/conf/client.svc", "$FWDIR/conf/local.scv", "$CPDIR/conf/local.scv", "$FWDIR/conf/client.scv"], "answer": 1, "answer_letter": "B"}, {"id": 124, "question": "Question #124\nThere are multiple types of licenses for the various VPN components and types. License type related to management and functioning of Remote Access VPNs are – which of the following license requirement statement is NOT true: required to manage the suite", "choices": ["IPSecVPNLicense » This license is installed on the VPN Gateway and is a basic requirement for a Remote Access VPN solution", "EndpointPolicyManagementLicense » The Endpoint Security Suite includes blades other than the Remote Access VPN, hence this license is", "EndpointContainerLicense » The Endpoint Software Blade Licenses does not require an Endpoint Container License as the base", "MobileAccessLicense » This license is required on the Security Gateway for the following Remote Access solutions"], "answer": 2, "answer_letter": "C"}, {"id": 125, "question": "Question #125\nYou want to allow your Mobile Access Users to connect to an internal le share. Adding the Mobile Application ‘File Share’ to your Access Control Policy in the SmartConsole didn't work. You will be only allowed to select Services for the ‘Service & Application’ column. How to x it?", "choices": ["The Mobile Access Blade is not enabled under Gateway properties.", "The Mobile Access Blade is not enabled for the Access Control Layer of the policy.", "A Quantum Spark Appliance is selected as Installation Target for the policy packet.", "The Mobile Access Policy Source under Gateway properties is set to Legacy Policy and not to Unied Access Policy"], "answer": 1, "answer_letter": "B"}, {"id": 126, "question": "Question #126\nWhich of the following authentication methods ARE NOT used for Mobile Access?", "choices": ["SecurID", "TACACS+", "RADIUS server", "Username and password (internal, LDAP)"], "answer": 1, "answer_letter": "B"}, {"id": 127, "question": "Question #127\nWhich of the following type of authentication on Mobile Access can NOT be used as the rst authentication method?", "choices": ["Username and Password", "Dynamic ID", "RADIUS", "Certicate"], "answer": 1, "answer_letter": "B"}, {"id": 128, "question": "Question #128\nIn what way are SSL VPN and IPSec VPN diferent?", "choices": ["IPSec VPN uses an additional virtual adapter, SSL VPN uses the client network adapter only.", "SSLVPN is using HTTPS in addition to IKE, whereas IPSec VPN is clientless", "IPSec VPN does not support two factor authentication, SSL VPN does support this", "SSLVPN adds an extra VPN header to the packet, IPSec VPN does not"], "answer": 0, "answer_letter": "A"}, {"id": 129, "question": "Question #129\nAlice was asked by Bob to implement the Check Point Mobile Access VPN blade – therefore are some basic conguration steps required – which statement about the conguration steps is true? 2. Congure Mobile Access parameters in Security Gateway object 3. Enable Mobile Access blade on the Security Gateway object and complete the wizard 4. Connect to the Mobile Access Portal 2. Enable Mobile Access blade on the Security Gateway object and complete the wizard 3. Congure Mobile Access parameters in Security Gateway object 4. Add a rule in the Access Control Policy and install policy 2. Enable Mobile Access blade on the Security Gateway object and complete the wizard 3 Add a rule in the Access Control Policy and install policy 4. Connect to the Mobile Access Portal 2. Congure Mobile Access parameters in Security Gateway object 3. Add a rule in the Access Control Policy and install policy 4. Connect to the Mobile Access Portal", "choices": ["1. Add a rule in the Access Control Policy and install policy", "1. Connect to the Mobile Access Portal", "1. Congure Mobile Access parameters in Security Gateway object", "1. Enable Mobile Access blade on the Security Gateway object and complete the wizard"], "answer": 3, "answer_letter": "D"}, {"id": 130, "question": "Question #130\nWhich 3 types of tracking are available for Threat Prevention Policy?", "choices": ["None, Log, Syslog", "Alert, SNMP trap, Mail", "SMS Alert, Log, SNMP alert", "Syslog, None, User-dened scripts"], "answer": 1, "answer_letter": "B"}, {"id": 131, "question": "Question #131\nWhich SmartEvent component is responsible to collect the logs from different Log Servers?", "choices": ["SmartEvent Database", "SmartEvent Collector", "SmartEvent Correlation Unit", "SmartEvent Server"], "answer": 2, "answer_letter": "C"}, {"id": 132, "question": "Question #132\nPlease, choose the path to monitor the compliance status of the Check Point Security Management.", "choices": ["Logs Monitor –> New Tab –> Open compliance View", "Security Policies –> New Tab –> Compliance View", "Compliance blade not available under R80.10", "Gateways Servers –> Compliance View"], "answer": 0, "answer_letter": "A"}, {"id": 133, "question": "Question #133\nYou need to change the number of rewall instances used by CoreXL. How can you achieve this goal?", "choices": ["cpcong; reboot not required", "edit fwanity.conf; reboot not required", "cpcong; reboot required", "edit fwanity.conf; reboot required"], "answer": 2, "answer_letter": "C"}, {"id": 134, "question": "Question #134\nDue to high CPU workload on the Security Gateway, the security administrator decided to purchase a new multicore CPU to replace the existing single core CPU. After installation, is the administrator required to perform any additional tasks?", "choices": ["Run cprestart from clish", "After upgrading the hardware, increase the number of kernel instances using cpcong", "Administrator does not need to perform any task. Check Point will make use of the newly installed CPU and Cores", "Hyperthreading must be enabled in the bios to use CoreXL."], "answer": 1, "answer_letter": "B"}, {"id": 135, "question": "Question #135\nBob is asked by Alice to disable the SecureXL mechanism temporary for further diagnostic by their Check Point partner. Which of the following Check Point Command is true:", "choices": ["fwaccel templates", "fwaccel suspend", "fwaccel standby", "fwaccel off"], "answer": 3, "answer_letter": "D"}, {"id": 136, "question": "Question #136\nIf SecureXL is disabled which path is used to process trac?", "choices": ["Passive path", "Firewall path", "Medium path", "Accelerated path"], "answer": 1, "answer_letter": "B"}, {"id": 137, "question": "Question #137\nWhich of the following Central Deployment is NOT a limitation in R81.20 SmartConsole?", "choices": ["Security Gateways/Clusters is ClusterXL HA new mode", "Dedicated Log Server", "Security Gateway Clusters in Load Sharing mode", "Dedicated SmartEvent Server"], "answer": 0, "answer_letter": "A"}, {"id": 138, "question": "Question #138\nMatt wants to upgrade his old Security Management Server to R81.x using the Advanced Upgrade with Database Migration. What is one of the requirements for a successful upgrade?", "choices": ["Size of the /var/log folder of the source machine must be at least 25% of the size of the /var/log directory on the target machine", "Size of the $FWDIR/log folder of the target machine must be a least 25% of the size of the $FWDIR/log directory on the source machine", "Size of the /var/log folder of the target machine must be 25GB or more", "Se of the /var/log folder of the target machine must be at least 25% of the size of the /var/log directory on the source machine"], "answer": 3, "answer_letter": "D"}, {"id": 139, "question": "Question #139\nWhich of the following is true regarding the Proxy ARP feature for Manual NAT?", "choices": ["The local.arp le must always be congured", "Automatic proxy ARP conguration can be enabled", "fw ctl proxy should be congured", "Translate Destination on Client Side should be congured"], "answer": 0, "answer_letter": "A"}, {"id": 140, "question": "Question #140\nWhat is the recommended number of physical network interfaces in a Mobile Access cluster deployment? fourth interface leading to the Security Management Server", "choices": ["2 Interfaces - a data interface leading to the organization and the Internet, a second interface for synchronization", "3 Interfaces - an interface leading to the organization, a second interface leading to the internet, a third interface for synchronization", "4 Interfaces - an interface leading to the organization, a second interface leading to the internet, a third interface for synchronization, a", "1 interface - an interface leading to the organization and the Internet, and congure for synchronization"], "answer": 1, "answer_letter": "B"}, {"id": 141, "question": "Question #141\nBob is going to prepare the import of the exported R81.10 management database. Now he wants to verify that the installed tools on the new target security management machine are able to handle the R81.10 release. Which of the following Check Point command is true?", "choices": ["$FWDIR/scripts/migrate_server print_installed_tools -v R77.30", "$CPDIR/scripts/migrate_server print_installed_tools -v R81.10", "$FWDIR/scripts/migrate_server print_uninstalled_tools -v R81.10", "$FWDIR/scripts/migrate_server print_installed_tools -v R81.10"], "answer": 3, "answer_letter": "D"}, {"id": 142, "question": "Question #142\nThe Firewall Administrator is required to create 100 new host objects with different IP addresses. What API command can he use in the script to achieve the requirement?", "choices": ["add hostname ip-address", "set hostname ip-address", "set host name ip-address", "mgmt_cli-m add host name ip-address"], "answer": 3, "answer_letter": "D"}, {"id": 143, "question": "Question #143\nWhich of the following is NOT an identity source used for Identity Awareness?", "choices": ["Remote Access", "UserCheck", "RADIUS", "AD Query"], "answer": 1, "answer_letter": "B"}, {"id": 144, "question": "Question #144\nThere are 4 ways to use the Management API for creating host object with the Management API. Which one is NOT correct?", "choices": ["Using cpcong", "Using CLISH", "Using SmartConsole GUI console", "Using Web Services"], "answer": 0, "answer_letter": "A"}, {"id": 145, "question": "Question #145\nWhat is a feature that enables VPN connections to successfully maintain a private and secure VPN session without employing Stateful Inspection?", "choices": ["VPN Routing Mode", "Stateless Mode", "Stateful Mode", "Wire Mode"], "answer": 3, "answer_letter": "D"}, {"id": 146, "question": "Question #146\nThe Check Point installation history feature in provides the following:", "choices": ["View install changes and install specic version.", "Policy Installation Date, view install changes and install specic version", "Policy Installation Date only", "View install changes"], "answer": 1, "answer_letter": "B"}, {"id": 147, "question": "Question #147\nBob has nished to setup provisioning a secondary security management server. Now he wants to check if the provisioning has been correct. Which of the following Check Point command can be used to check if the security management server has been installed as a primary or a secondary security management server?", "choices": ["cpprod_util MgmtIsPrimary", "cpprod_util FwIsSecondary", "cpprod_util FwIsPrimary", "cpprod_util MgmtIsSecondary"], "answer": 2, "answer_letter": "C"}, {"id": 148, "question": "Question #148\nConnections to the Check Point R80 Web API use what protocol?", "choices": ["SIC", "SOAP", "HTTPS", "HTTP"], "answer": 2, "answer_letter": "C"}, {"id": 149, "question": "Question #149\nHow can you see historical data with cpview?", "choices": ["cpview -e", "cpview -d", "cpview -f", "cpview -t"], "answer": 3, "answer_letter": "D"}, {"id": 150, "question": "Question #150\nThe “fw monitor” tool can be best used to troubleshoot _________.", "choices": ["FWD issues", "Authentication issues", "Logging issues", "Network trac issues"], "answer": 3, "answer_letter": "D"}, {"id": 151, "question": "Question #151\nAlice & Bob are going to deploy Management Data Plane Separation (MDPS) for all their Check Point Security Gateway(s)/Cluster(s). Which of the following statement is true:", "choices": ["Data Plane - To access, provision and monitor the Security Gateway", "Management Plane - for all other network trac and processing", "Each network environment is dependent and includes interfaces, routes, sockets, and processes", "Management Plane - To access, provision and monitor the Security Gateway"], "answer": 3, "answer_letter": "D"}, {"id": 152, "question": "Question #152\nThe customer has about 150 remote access user with Windows laptops. Not more than 50 Clients will be connected at the same time. The customer wants to use multiple VPN Gateways as entry point and a personal rewall. What will be the best license for him?", "choices": ["He will need Harmony Endpoint because of the personal rewall.", "Mobile Access license because he needs only a 50 user license, license count is per concurrent user.", "Because the customer uses only Windows clients SecuRemote will be sucient and no additional license is needed.", "He will need Capsule Connect using MEP (multiple entry points)."], "answer": 0, "answer_letter": "A"}, {"id": 153, "question": "Question #153\nAccording to the policy installation ow the transfer state (CPTA) is responsible for the code generated by the FWM. On the Security Gateway side, a process receives them and rst stores them into a temporary directory. Which process is true for receiving these les:", "choices": ["CPD", "RAD", "FWD", "FWM"], "answer": 0, "answer_letter": "A"}, {"id": 154, "question": "Question #154\nWhat ports are used for SmartConsole to connect to the Security Management Server?", "choices": ["CPMI (18190)", "ICA_Pull (18210), CPMI (18190) https (443)", "CPM (19009), CPMI (18190) https (443)", "CPM (19009), CPMI (18190) CPD (18191)"], "answer": 2, "answer_letter": "C"}, {"id": 155, "question": "Question #155\nWhich of the following Check Point processes within the Security Management Server is responsible for the receiving of log records from Security Gateway?", "choices": ["cpd", "fwm", "logd", "fwd"], "answer": 3, "answer_letter": "D"}, {"id": 156, "question": "Question #156\nWhich packet info is masked with Session Rate Acceleration?", "choices": ["source ip", "source port ranges", "source port", "same info from Packet Acceleration is used"], "answer": 2, "answer_letter": "C"}, {"id": 157, "question": "Question #157\nWith SecureXL enabled, accelerated packets will pass through the following:", "choices": ["Network Interface Card, Check Point Firewall Kernel, and the Acceleration Device", "Network Interface Card, OSI Network Layer, OS IP Stack, and the Acceleration Device", "Network Interface Card, OSI Network Layer, and the Acceleration Device", "Network Interface Card and the Acceleration Device"], "answer": 3, "answer_letter": "D"}, {"id": 158, "question": "Question #158\nIn R81.10 a new feature called dynamic log distribution was added. What is this for? space in /var/log redundancy", "choices": ["Synchronize the log between the primary and secondary management server in case of a Management High Availability", "In case of a Management High Availability the management server stores the logs dynamically on the member with the most available disk", "To save disk space in case of a rewall cluster local logs are distributed between the cluster members", "Congure the Security Gateway to distribute logs between multiple active Log Servers to support a better rate of Logs and Log Servers"], "answer": 3, "answer_letter": "D"}, {"id": 159, "question": "Question #159\nCheck Point Management (cpm) is the main management process in that it provides the architecture for a consolidated management console. CPM allows the GUI client and management server to communicate via web services using _______.", "choices": ["TCP Port 18190", "TCP Port 18191", "TCP Port 18209", "TCP port 19009"], "answer": 3, "answer_letter": "D"}, {"id": 160, "question": "Question #160\nCPM process stores objects, policies, users, administrators, licenses and management data in a database. This database is:", "choices": ["MySQL", "SOLR", "MarisDB", "PostgreSQL"], "answer": 3, "answer_letter": "D"}, {"id": 161, "question": "Question #161\nWhat are scenarios supported by the Central Deployment in SmartConsole?", "choices": ["Installation of Jumbo Hotx on a ClusterXL environment in High Availability Mode", "Upgrading a Dedicated SmartEvent Server", "Upgrading a Dedicated Log Server to R81", "Upgrading a Standalone environment"], "answer": 0, "answer_letter": "A"}, {"id": 162, "question": "Question #162\nWhat solution is Multi-queue intended to provide?", "choices": ["Reduce the confusion for trac capturing in FW Monitor", "Reduce the performance of network interfaces", "Improve the eciency of CoreXL Kernel Instances", "Improve the eciency of trac handling by SecureXL SNDs"], "answer": 3, "answer_letter": "D"}, {"id": 163, "question": "Question #163\nFrom SecureXL perspective, what are the three paths of trac ow:", "choices": ["Initial Path; Medium Path; Accelerated Path", "Firewall Path; Accept Path; Drop Path", "Layer Path; Blade Path; Rule Path", "Firewall Path; Accelerated Path; Medium Path"], "answer": 3, "answer_letter": "D"}, {"id": 164, "question": "Question #164\nWhat command is used to manually failover a Multi-Version Cluster during the upgrade?", "choices": ["set cluster member state down in Clish", "clusterXL_admin down in Expert Mode", "set cluster down in Expert Mode", "clusterXL_admin down in Clish"], "answer": 1, "answer_letter": "B"}, {"id": 165, "question": "Question #165\nFill in the blank: An identity server uses a ____________ to trust a Terminal Server Identity Agent.", "choices": ["Shared secret", "One-time password", "Certicate", "Token"], "answer": 0, "answer_letter": "A"}, {"id": 166, "question": "Question #166\nHow can you make sure that the old logs will be available after updating the Management to version R81.20 using the Advanced Upgrade Method?", "choices": ["Use the WebUI -> Maintenance > System Backup and store the backup on a remote FTP server", "The logs will be included running $FWDIR/scripts/migrate_server export -v R81.10", "Use the WebUI to save a snapshot before updating the Management -> Maintenance > Snapshot Management", "Use the migrate_server tool with the option ‘-l’ for the logs and ‘-x’ for the index"], "answer": 3, "answer_letter": "D"}, {"id": 167, "question": "Question #167\nThe Check Point Central Deployment Tool (CDT) communicates with the Security Gateway(s) over Check Point SIC via ___________.", "choices": ["TCP Port 19009", "TCP Port 18190", "TCP Port 18191", "TCP Port 18209"], "answer": 3, "answer_letter": "D"}, {"id": 168, "question": "Question #168\nWhat is the command to check the status of Check Point processes?", "choices": ["cphaprob list", "top", "cpwd_admin list", "cptop"], "answer": 3, "answer_letter": "D"}, {"id": 169, "question": "Question #169\nWhich of the following processes pulls the application monitoring status from gateways?", "choices": ["cpm", "cpd", "fwm", "cpwd"], "answer": 1, "answer_letter": "B"}, {"id": 170, "question": "Question #170\nWhat is false regarding a Management HA environment? the management database from the prior.", "choices": ["SmartConsole can connect to any management server in ReadOnly mode.", "It is not necessary to establish SIC between the primary and secondary management server, since the latter gets the exact same copy of", "Only one Management Server should be active, while any others be in standby mode", "Synchronization will occur automatically with each Publish event if the Standby servers are available."], "answer": 1, "answer_letter": "B"}, {"id": 171, "question": "Question #171\nIn CoreXL, the Firewall kernel is replicated multiple times. Each replicated copy or instance can perform the following:", "choices": ["The Firewall kernel only touches the packet if the connection is accelerated", "The Firewall kernel is replicated only with new connections and deletes itself once the connection times out", "The Firewall can run the same policy on all cores", "The Firewall can run different policies per core"], "answer": 2, "answer_letter": "C"}, {"id": 172, "question": "Question #172\nAn established connection is going to www.google.com. The Application Control Blade is inspecting the trac. If SecureXL and CoreXL are both enabled, which path is handling the trac?", "choices": ["Medium Path", "Accelerated Path", "Slow Path", "Fast Path"], "answer": 0, "answer_letter": "A"}, {"id": 173, "question": "Question #173\nWhich is the lowest gateway version supported by R81.20 management server?", "choices": ["R77.30", "R80.20", "R77", "R65"], "answer": 0, "answer_letter": "A"}, {"id": 174, "question": "Question #174\nWhat is the purpose of Captive Portal?", "choices": ["It authenticates users, allowing them access to the Gaia OS", "It authenticates users, allowing them access to the Internet and corporate resources", "It provides remote access to SmartConsole", "It manages user permission in SmartConsole"], "answer": 1, "answer_letter": "B"}, {"id": 175, "question": "Question #175\nWhich of the following is NOT a component of Check Point Capsule?", "choices": ["Capsule Workspace", "Capsule Enterprise", "Capsule Docs", "Capsule Cloud"], "answer": 1, "answer_letter": "B"}, {"id": 176, "question": "Question #176\nWhich of the following is a task of the CPD process?", "choices": ["Transfers messages between Firewall processes", "Invoke and monitor critical processes and attempts to restart them if they fail", "Responsible for processing most trac on a security gateway", "Log forwarding"], "answer": 0, "answer_letter": "A"}, {"id": 177, "question": "Question #177\nTo fully enable Dynamic Dispatcher on a Security Gateway:", "choices": ["Using cpcong, update the Dynamic Dispatcher value to “full” under the CoreXL menu", "Edit /proc/interrupts to include multik set_mode 1 at the bottom of the le, save, and reboot", "run fw ctl multik set_mode 1 in Expert mode and then reboot", "run “fw ctl muitik dynamic_dispatching on” and then reboot"], "answer": 3, "answer_letter": "D"}, {"id": 178, "question": "Question #178\nYou have successfully backed up your Management Server database without the OS information. What command would you use to restore this backup?", "choices": ["restore_backup", "import backup", "cp_merge", "migrate_server import"], "answer": 3, "answer_letter": "D"}, {"id": 179, "question": "Question #179\nYou have a Gateway that is running with 2 cores. You plan to add a second gateway to build a cluster and used a device with 4 cores. How many cores can be used in a Cluster for Firewall-kernel on the new device?", "choices": ["2", "1", "3", "4"], "answer": 0, "answer_letter": "A"}, {"id": 180, "question": "Question #180\nWhich of the SecureXL templates are enabled by default on Security Gateway?", "choices": ["NAT", "Drop", "None", "Accept"], "answer": 3, "answer_letter": "D"}, {"id": 181, "question": "Question #181\nWhich command shows the current connections distributed by CoreXL FW instances?", "choices": ["fw ctl iist", "fw ctl instances -v", "fw ctl multik stat", "fw ctl anity -1"], "answer": 2, "answer_letter": "C"}, {"id": 182, "question": "Question #182\nSecureXL improves non-encrypted rewall trac throughput and encrypted VPN trac throughput.", "choices": ["True, because SecureXL does improve all trac", "True, because SecureXL does improve this trac", "False, because encrypted trac cannot be inspected", "False, because SecureXL does not improve this trac but CoreXL does"], "answer": 1, "answer_letter": "B"}, {"id": 183, "question": "Question #183\nThe system administrator of a company is trying to nd out why acceleration is not working for the trac. The trac is allowed according to the rule base and checked for viruses. But it is not accelerated. What is the most likely reason that the trac is not accelerated?", "choices": ["The packets are not multicast", "The packet is the second in an established TCP connection", "The connection is destined for a server within the network", "The connection required a Security server"], "answer": 3, "answer_letter": "D"}, {"id": 184, "question": "Question #184\nBy default, the web API uses which content-type in its response?", "choices": ["JSON", "Java Script", "Text", "XML"], "answer": 0, "answer_letter": "A"}, {"id": 185, "question": "Question #185\nWhich command is used to set the CCP protocol to Multicast?", "choices": ["cphaprob set_ccp no_broadcast", "cphaconf set_ccp no_broadcast", "cphaprob set_ccp multicast", "cphaconf set_ccp multicast"], "answer": 3, "answer_letter": "D"}, {"id": 186, "question": "Question #186\nAn administrator wishes to enable Identity Awareness on the Check Point rewalls. However, they allow users to use company issued or personal laptops. Since the administrator cannot manage the personal laptops, which of the following methods would BEST suit this company?", "choices": ["AD Query", "Terminal Servers Agent", "Identity Agents", "Browser-Based Authentication"], "answer": 3, "answer_letter": "D"}, {"id": 187, "question": "Question #187\nWhat is the amount of Priority Queues by default?", "choices": ["There are 8 priority queues by default, and up to 8 additional queues can be manually congured", "There are 7 priority queues by default and this number cannot be changed.", "There is no distinct number of queues since it will be changed in a regular basis based on its system requirements.", "There are 8 priority queues and this number cannot be changed."], "answer": 0, "answer_letter": "A"}, {"id": 188, "question": "Question #188\nWhat is the SOLR database for?", "choices": ["Serves GUI responsible to transfer request to the DLEserver", "Used for full text search and enables powerful matching capabilities", "Enables powerful matching capabilities and writes data to the database", "Writes data to the database and full text search"], "answer": 1, "answer_letter": "B"}, {"id": 189, "question": "Question #189\nFill in the blank: An Endpoint Identity agent uses a _________ for user authentication.", "choices": ["Shared secret", "Username/password or Kerberos Ticket", "Token", "Certicate"], "answer": 1, "answer_letter": "B"}, {"id": 190, "question": "Question #190\nWhich of the following is an authentication method used for Identity Awareness?", "choices": ["RSA", "SSL", "Captive Portal", "PKI"], "answer": 2, "answer_letter": "C"}, {"id": 191, "question": "Question #191\nYour manager asked you to check the status of SecureXL, and its enabled templates and features. What command will you use to provide such information to manager?", "choices": ["fwaccel stats", "fwaccel stat", "fw access stats", "fw accel stat"], "answer": 1, "answer_letter": "B"}, {"id": 192, "question": "Question #192\nWhat command lists all interfaces using Multi-Queue?", "choices": ["show interface all", "mq_mng –show", "show multiqueue all", "cpmq set"], "answer": 1, "answer_letter": "B"}, {"id": 193, "question": "Question #193\nWhat is true about the IPS-Blade?", "choices": ["In the IPS Layer, the only three possible actions are Basic, Optimized and Strict", "IPS is managed by the Threat Prevention Policy", "IPS Exceptions cannot be attached to “all rules”", "The GeoPolicy Exceptions and the Threat Prevention Exceptions are the same"], "answer": 1, "answer_letter": "B"}, {"id": 194, "question": "Question #194\nAlice wants to upgrade the current security management machine from R80.40 to R81.20 and she wants to check the Deployment Agent status over the GAIA CLISH. Which of the following GAIA CLISH command is true?", "choices": ["show installer packages", "show agent status", "show uninstaller status", "show installer status"], "answer": 3, "answer_letter": "D"}, {"id": 195, "question": "Question #195\nWhich member of a high-availability cluster should be upgraded rst in a Zero downtime upgrade?", "choices": ["The Primary Member", "The Standby Member", "The Secondary Member", "The Active Member"], "answer": 1, "answer_letter": "B"}, {"id": 196, "question": "Question #196\nWhich type of Endpoint Identity Agent includes packet tagging and computer authentication?", "choices": ["Full", "Custom", "Light", "Complete"], "answer": 0, "answer_letter": "A"}, {"id": 197, "question": "Question #197\nWhich Check Point software blade provides visibility of users, groups and machines while also providing access control through identity-based policies?", "choices": ["Application Control", "Firewall", "Identity Awareness", "URL Filtering"], "answer": 2, "answer_letter": "C"}, {"id": 198, "question": "Question #198\nWhich of the following is NOT an attribute of packet acceleration?", "choices": ["Destination port", "Protocol", "VLAN tag", "Source address"], "answer": 2, "answer_letter": "C"}, {"id": 199, "question": "Question #199\nWhen using the Mail Transfer Agent, where are the debug logs stored?", "choices": ["$FWDIR/log/mtad.elg", "$CPDIR/log/emailed.elg", "$FWDIR/bin/email.mta.elg", "/var/log/mail.mta.elg"], "answer": 0, "answer_letter": "A"}];
+
+const el = (sel)=>document.querySelector(sel);
+const quizEl = el('#quiz');
+const scoreBanner = el('#scoreBanner');
+const modeEl = el('#mode');
+const countEl = el('#count');
+const markBtn = el('#markBtn');
+const confirmBtn = el('#confirmBtn');
+const nextBtn = el('#nextBtn');
+const prevBtn = el('#prevBtn');
+const footerCard = el('#footerCard');
+const rangeFromEl = el('#rangeFrom');
+const rangeToEl = el('#rangeTo');
+const searchWrap = el('#searchWrap');
+const searchInput = el('#searchInput');
+const searchBtn = el('#searchBtn');
+const clearSearchBtn = el('#clearSearchBtn');
+const countWrap = el('#countWrap');
+const rangeWrap = el('#rangeWrap');
+const toggleOriginal = el('#toggleOriginal');
+
+let started = false;
+let order = [];
+let answers = {};     // i -> 0..3
+let revealed = {};    // i -> boolean (after confirm)
+let locked = {};      // i -> boolean (after confirm)
+let idx = 0;
+
+const WRONG_KEY = "ccse_wrong_ids";
+const MARK_KEY = "ccse_mark_ids";
+const STATS_KEY = "ccse_stats"; // { qid: {attempts, correct, wrong} }
+const SHOW_ORIG_KEY = "ccse_show_orig";
+const wrongList = new Set(JSON.parse(localStorage.getItem(WRONG_KEY) || "[]"));
+const markSet = new Set(JSON.parse(localStorage.getItem(MARK_KEY) || "[]"));
+let stats = {};
+try { stats = JSON.parse(localStorage.getItem(STATS_KEY) || "{}"); } catch(e){ stats = {}; }
+try { toggleOriginal.checked = JSON.parse(localStorage.getItem(SHOW_ORIG_KEY) || "false"); } catch(e){}
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function updateHdr(){
+  el('#hdrMeta').textContent = `題庫：${BANK.length} 題｜歷史錯題：${wrongList.size}｜已標記：${markSet.size}`;
+  const mode = modeEl.value;
+  footerCard.classList.toggle('hidden', !started || mode==='review_wrong_all' || mode==='search');
+  countWrap.classList.toggle('hidden', !(mode==='exam' || mode==='review_wrong'));
+  rangeWrap.classList.toggle('hidden', !(mode==='exam' || mode==='review_wrong'));
+  searchWrap.classList.toggle('hidden', mode!=='search');
+  scoreBanner.classList.add('hidden');
+}
+
+function persist(){
+  localStorage.setItem(WRONG_KEY, JSON.stringify(Array.from(wrongList)));
+  localStorage.setItem(MARK_KEY, JSON.stringify(Array.from(markSet)));
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  localStorage.setItem(SHOW_ORIG_KEY, JSON.stringify(toggleOriginal.checked));
+  updateHdr();
+}
+
+function applyRange(pool){
+  const fromV = parseInt(rangeFromEl.value||"");
+  const toV = parseInt(rangeToEl.value||"");
+  if(!isNaN(fromV) && !isNaN(toV)){
+    const lo = Math.min(fromV, toV);
+    const hi = Math.max(fromV, toV);
+    return pool.filter(q => (q.id||0) >= lo && (q.id||0) <= hi);
+  }
+  return pool;
+}
+
+function buildQStats(qid){
+  const s = stats[qid] || {attempts:0, correct:0, wrong:0};
+  return `<span class="qstats">【作答次數: ${s.attempts}｜答對: ${s.correct}｜答錯: ${s.wrong}】</span>`;
+}
+
+function cleanQuestion(text){
+  const re = /^\s*(question\s*#?\s*\d+\s*[:.)-]?\s*)/i;
+  return text.replace(re, '');
+}
+
+function computeBasePool(){
+  let base = [];
+  if (modeEl.value === 'review_wrong' || modeEl.value === 'review_wrong_all') {
+    base = BANK.filter(q=>wrongList.has(q.id));
+  } else {
+    base = BANK.slice();
+  }
+  if (modeEl.value !== 'review_wrong_all' && modeEl.value !== 'search') base = applyRange(base);
+  return base;
+}
+
+function showPreStartSummary(){
+  const mode = modeEl.value;
+  const n = parseInt(countEl.value,10);
+  const base = computeBasePool();
+  const poolSize = base.length;
+  const fromV = rangeFromEl.value ? parseInt(rangeFromEl.value) : null;
+  const toV = rangeToEl.value ? parseInt(rangeToEl.value) : null;
+  const rangeTxt = (fromV && toV) ? `${Math.min(fromV,toV)}–${Math.max(fromV,toV)}` : '全部';
+  const willUse = (mode==='exam' || mode==='review_wrong') ? Math.min(n, poolSize) : poolSize;
+  const hitCap = (mode==='exam' || mode==='review_wrong') && willUse < n;
+
+  const lines = [
+    `<div>模式：<b>${({exam:'Exam',review_wrong:'Review Wrong（隨機）',review_wrong_all:'Review Wrong（全部）',search:'Search'})[mode]}</b></div>`,
+    (mode==='search') ? `<div>說明：本模式需輸入關鍵字後按「搜尋」。</div>` : '',
+    (mode!=='search' && mode!=='review_wrong_all') ? `<div>題號範圍：<b>${rangeTxt}</b></div>` : '',
+    `<div>可用題數：<b>${poolSize}</b></div>`,
+    (mode==='exam' || mode==='review_wrong') ? `<div>本次題數：<b>${willUse}</b>${hitCap ? `（少於欲選 ${n} 題，已自動以可用題數為主）` : ''}</div>` : '',
+  ].join('');
+
+  quizEl.innerHTML = `
+    <div class="card">
+      <div class="summary">
+        <div style="font-weight:600;">開始前摘要</div>
+        ${lines}
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <button class="btn" id="confirmStartBtn">確認開始</button>
+          <button class="btn secondary" id="cancelStartBtn">取消</button>
+        </div>
+      </div>
+    </div>`;
+
+  el('#confirmStartBtn').addEventListener('click', ()=>{
+    started = true;
+    startActual();
+  });
+  el('#cancelStartBtn').addEventListener('click', ()=>{
+    started = false;
+    render(); // back to idle screen
+  });
+}
+
+function start(){
+  // Show summary first; only after confirming we startActual()
+  started = false;
+  showPreStartSummary();
+}
+
+function startActual(){
+  answers = {}; revealed = {}; locked = {}; idx = 0;
+  scoreBanner.classList.add('hidden');
+
+  const base = computeBasePool();
+
+  if (modeEl.value === 'review_wrong_all' || modeEl.value === 'search') {
+    order = base.slice().sort((a,b)=> (a.id||0)-(b.id||0));
+    started = true;
+    render();
+  } else {
+    const n = parseInt(countEl.value,10);
+    order = shuffle(base).slice(0, Math.min(n, base.length)).map(q => ({...q}));
+    started = true;
+    render();
+  }
+}
+
+function onPick(i, choice){
+  if (!started) return;
+  if (locked[i]) return;
+  answers[i] = choice;
+  render();
+}
+
+function confirmCurrent(){
+  if (!started) return;
+  const q = order[idx];
+  if (!q) return;
+  if (revealed[idx]) return;
+  const a = answers[idx];
+  if (a === undefined) return;
+
+  revealed[idx] = true;
+  locked[idx] = true;
+
+  if (!stats[q.id]) stats[q.id] = {attempts:0, correct:0, wrong:0};
+  stats[q.id].attempts += 1;
+  const outcome = (a === q.answer) ? 'correct' : 'wrong';
+  stats[q.id][outcome] += 1;
+
+  if (outcome === 'wrong' || markSet.has(q.id)) wrongList.add(q.id);
+  else wrongList.delete(q.id);
+
+  persist();
+  render();
+}
+
+function goNext(){
+  if (!started) return;
+  if (!revealed[idx]) return; // must confirm before next
+  if (idx < order.length - 1){ idx += 1; render(); }
+}
+
+function goPrev(){
+  if (!started) return;
+  if (idx > 0){ idx -= 1; render(); }
+}
+
+function render(){
+  const mode = modeEl.value;
+  updateHdr();
+  if (!started){
+    quizEl.innerHTML = `<div class="card"><div class="qtxt">按「開始」後會先顯示本次小測驗摘要。</div></div>`;
+    return;
+  }
+
+  if (mode === 'review_wrong_all'){
+    if(order.length===0){
+      quizEl.innerHTML = `<div class="card"><div class="qtxt">目前錯題清單是空的。</div></div>`;
+      return;
+    }
+    quizEl.innerHTML = order.map((q,i)=> renderListCard(q, i, order.length)).join("");
+    wireListControls();
+    return;
+  }
+
+  if (mode === 'search'){
+    const query = searchInput.value.trim();
+    if(!query){
+      quizEl.innerHTML = `<div class="card"><div class="qtxt">請輸入關鍵字再按「搜尋」。支援多關鍵字（以空白分隔）。</div></div>`;
+      return;
+    }
+    const toks = query.split(/\s+/).map(s=>s.toLowerCase());
+    const matches = order.filter(q=> toks.every(t=> (q.question+" "+q.choices.join(" ")).toLowerCase().includes(t)));
+    if (matches.length===0){
+      quizEl.innerHTML = `<div class="card"><div class="qtxt">沒有符合的題目。</div></div>`;
+      return;
+    }
+    quizEl.innerHTML = matches.map((q,i)=> renderListCard(q, i, matches.length)).join("");
+    wireListControls();
+    return;
+  }
+
+  // Single-question UI with confirm-to-reveal
+  const q = order[idx];
+  if(!q){
+    quizEl.innerHTML = `<div class="card"><div class="qtxt">沒有符合條件的題目。請調整題號範圍或切換模式。</div></div>`;
+    return;
+  }
+  const a = answers[idx];
+  const isRevealed = !!revealed[idx];
+  const isLocked = !!locked[idx];
+  const choiceHTML = q.choices.map((c,k)=>{
+    const chosen = (a === k);
+    let cls = "choice";
+    if (isLocked) cls += " locked";
+    if (chosen) cls += " selected";
+    if (isRevealed){
+      if (k === q.answer) cls += " correct";
+      if (chosen && k !== q.answer) cls += " wrong";
+    }
+    return `<div class="${cls}" data-k="${k}"><b>${(k+1)}</b>. ${c.replace(/</g,"&lt;")}</div>`;
+  }).join("");
+
+  const origIdHtml = toggleOriginal.checked ? `<div class="pill">原始ID #${q.id}</div>` : "";
+  const cleaned = cleanQuestion(q.question).replace(/</g,"&lt;");
+
+  quizEl.innerHTML = `
+    <div class="card">
+      <div class="qhead">
+        <div class="qid">題目 ${idx+1} / ${order.length}</div>
+        ${origIdHtml}
+      </div>
+      <div class="qstats">${buildQStats(q.id)}</div>
+      <div class="qtxt">${cleaned}</div>
+      <div class="choices">${choiceHTML}</div>
+    </div>`;
+
+  quizEl.querySelectorAll('.choice').forEach(ch=>{
+    ch.addEventListener('click', ()=>{
+      const k = parseInt(ch.dataset.k);
+      onPick(idx, k);
+    });
+  });
+
+  prevBtn.classList.toggle('disabled', idx===0);
+  nextBtn.classList.toggle('disabled', idx===order.length-1 || !isRevealed);
+  confirmBtn.classList.toggle('disabled', isRevealed || a===undefined);
+
+  // Mark state
+  markBtn.classList.remove('hidden');
+  const marked = markSet.has(q.id);
+  markBtn.classList.toggle('active', marked);
+  markBtn.textContent = marked ? '取消標記' : '標記此題';
+}
+
+function renderListCard(q, i, total){
+  const s = stats[q.id] || {attempts:0, correct:0, wrong:0};
+  const isMarked = markSet.has(q.id);
+  const choices = q.choices.map((c,k)=>{
+    const isCorrect = (k===q.answer);
+    const cls = "choice" + (isCorrect ? " correct":"");
+    return `<div class="${cls}"><b>${(k+1)}</b>. ${c.replace(/</g,"&lt;")}</div>`;
+  }).join("");
+  const origIdHtml = toggleOriginal.checked ? `<div class="pill">原始ID #${q.id}</div>` : "";
+  const cleaned = cleanQuestion(q.question).replace(/</g,"&lt;");
+  return `
+  <div class="card" data-qid="${q.id}">
+    <div class="qhead">
+      <div class="qid">題目 ${i+1} / ${total}</div>
+      ${origIdHtml}
+    </div>
+    <div class="qstats">【作答次數: ${s.attempts}｜答對: ${s.correct}｜答錯: ${s.wrong}】</div>
+    <div class="qtxt">${cleaned}</div>
+    <div class="choices">${choices}</div>
+    <div class="inline-controls" style="margin-top:10px;">
+      <button class="btn secondary" data-action="toggleMark">${isMarked ? "取消標記" : "標記此題"}</button>
+      <button class="btn danger" data-action="removeWrong">移出錯題清單</button>
+    </div>
+  </div>`;
+}
+
+function wireListControls(){
+  quizEl.querySelectorAll('.card').forEach(card=>{
+    const qid = parseInt(card.dataset.qid,10);
+    const toggleBtn = card.querySelector('[data-action="toggleMark"]');
+    const removeBtn = card.querySelector('[data-action="removeWrong"]');
+    if(toggleBtn){
+      toggleBtn.addEventListener('click', ()=>{
+        if (markSet.has(qid)) markSet.delete(qid); else markSet.add(qid);
+        persist();
+        render();
+      });
+    }
+    if(removeBtn){
+      removeBtn.addEventListener('click', ()=>{
+        wrongList.delete(qid);
+        persist();
+        card.remove();
+      });
+    }
+  });
+}
+
+function submit(){
+  if (!started) return;
+  const total = order.length;
+  let correct = 0;
+  order.forEach((q,i)=>{
+    const a = answers[i];
+    if (a === q.answer) correct += 1;
+    if (markSet.has(q.id) || a !== q.answer) wrongList.add(q.id);
+    else wrongList.delete(q.id);
+  });
+  persist();
+  scoreBanner.textContent = `本次成績：${correct}/${total}（${(correct/total*100).toFixed(1)}%）`;
+  scoreBanner.classList.remove('hidden');
+
+  quizEl.innerHTML = order.map((q,i)=>{
+    const a = answers[i];
+    const s = stats[q.id] || {attempts:0, correct:0, wrong:0};
+    const choices = q.choices.map((c,k)=>{
+      const isCorrect = (k===q.answer);
+      const chosen = (a === k);
+      let cls = "choice";
+      if (isCorrect) cls += " correct";
+      if (chosen && !isCorrect) cls += " wrong";
+      if (chosen) cls += " selected";
+      return `<div class="${cls}"><b>${(k+1)}</b>. ${c.replace(/</g,"&lt;")}</div>`;
+    }).join("");
+    const origIdHtml = toggleOriginal.checked ? `<div class="pill">原始ID #${q.id}</div>` : "";
+    const cleaned = cleanQuestion(q.question).replace(/</g,"&lt;");
+    return `
+    <div class="card" data-qid="${q.id}">
+      <div class="qhead">
+        <div class="qid">題目 ${i+1} / ${order.length}</div>
+        ${origIdHtml}
+      </div>
+      <div class="qstats">【作答次數: ${s.attempts}｜答對: ${s.correct}｜答錯: ${s.wrong}】</div>
+      <div class="qtxt">${cleaned}</div>
+      <div class="choices">${choices}</div>
+      <div class="inline-controls" style="margin-top:10px;">
+        <button class="btn secondary" data-action="toggleMark">${markSet.has(q.id) ? "取消標記" : "標記此題"}</button>
+        <button class="btn danger" data-action="removeWrong">移出錯題清單</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  wireListControls();
+}
+
+document.addEventListener('keydown', (e)=>{
+  if (!started) return;
+  const mode = modeEl.value;
+  if (mode==='exam' || mode==='review_wrong'){
+    if (['1','2','3','4'].includes(e.key)){
+      onPick(idx, parseInt(e.key)-1);
+    } else if (e.key === 'Enter'){
+      confirmCurrent();
+    } else if (e.key === 'ArrowRight'){
+      goNext();
+    } else if (e.key === 'ArrowLeft'){
+      goPrev();
+    }
+  }
+});
+
+el('#startBtn').addEventListener('click', ()=>{ started=false; showPreStartSummary(); });
+el('#resetBtn').addEventListener('click', ()=>{
+  answers = {}; revealed = {}; locked = {}; idx = 0; started = false;
+  wrongList.clear();
+  markSet.clear();
+  stats = {};
+  localStorage.removeItem(WRONG_KEY);
+  localStorage.removeItem(MARK_KEY);
+  localStorage.removeItem(STATS_KEY);
+  persist();
+  render();
+});
+prevBtn?.addEventListener('click', goPrev);
+nextBtn?.addEventListener('click', goNext);
+confirmBtn?.addEventListener('click', confirmCurrent);
+el('#submitBtn')?.addEventListener('click', submit);
+el('#exportWrongBtn')?.addEventListener('click', ()=>{
+  const ids = Array.from(wrongList);
+  const blob = new Blob([JSON.stringify(ids, null, 2)], {type:"application/json"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ccse_wrong_ids.json';
+  a.click();
+});
+modeEl.addEventListener('change', ()=>{ if (started) startActual(); else render(); });
+toggleOriginal.addEventListener('change', ()=>{ persist(); render(); });
+searchBtn.addEventListener('click', ()=>{
+  if (!started){ started=true; startActual(); }
+  order = BANK.slice().sort((a,b)=> (a.id||0)-(b.id||0));
+  render();
+});
+clearSearchBtn.addEventListener('click', ()=>{
+  searchInput.value = "";
+  render();
+});
+
+updateHdr();
+render();
+</script>
+</body>
+</html>
